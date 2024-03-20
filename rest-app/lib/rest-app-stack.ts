@@ -10,7 +10,11 @@ import {
 import { AttributeType, BillingMode, Table } from "aws-cdk-lib/aws-dynamodb";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Construct } from "constructs";
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { RemovalPolicy } from "aws-cdk-lib";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import { Runtime } from "aws-cdk-lib/aws-lambda";
+import { S3DeployAction } from "aws-cdk-lib/aws-codepipeline-actions";
+import { ReadFromFile } from "../src/functions/read-from-file.class";
 
 export class RestAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -21,7 +25,7 @@ export class RestAppStack extends cdk.Stack {
       partitionKey: { name: "pk", type: AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       billingMode: BillingMode.PAY_PER_REQUEST,
-      tableName: "FilmsTable"
+      tableName: "FilmsTable",
     });
 
     // Create REST API - this API will expose endpoints to interact with the application
@@ -52,6 +56,7 @@ export class RestAppStack extends cdk.Stack {
 
     // defining Lambdas
     const createFilmLambda = new NodejsFunction(this, "CreateLambda", {
+      runtime: Runtime.NODEJS_20_X,
       entry: "src/functions/create.ts",
       handler: "handler",
       environment: {
@@ -60,6 +65,7 @@ export class RestAppStack extends cdk.Stack {
     });
 
     const getFilmLambda = new NodejsFunction(this, "GetLambda", {
+      runtime: Runtime.NODEJS_20_X,
       entry: "src/functions/get-one.ts",
       handler: "handler",
       environment: {
@@ -68,6 +74,7 @@ export class RestAppStack extends cdk.Stack {
     });
 
     const getAllFilmsLambda = new NodejsFunction(this, "GetAllLambda", {
+      runtime: Runtime.NODEJS_20_X,
       entry: "src/functions/get-all.ts",
       handler: "handler",
       environment: {
@@ -76,6 +83,7 @@ export class RestAppStack extends cdk.Stack {
     });
 
     const updateFilmLambda = new NodejsFunction(this, "UpdateLambda", {
+      runtime: Runtime.NODEJS_20_X,
       entry: "src/functions/update.ts",
       handler: "handler",
       environment: {
@@ -84,6 +92,7 @@ export class RestAppStack extends cdk.Stack {
     });
 
     const deleteFilmLambda = new NodejsFunction(this, "DeleteLambda", {
+      runtime: Runtime.NODEJS_20_X,
       entry: "src/functions/delete.ts",
       handler: "handler",
       environment: {
@@ -128,5 +137,41 @@ export class RestAppStack extends cdk.Stack {
     new cdk.CfnOutput(this, "API Key ID", {
       value: apiKey.keyId,
     });
+
+    const bucket = new s3.Bucket(this, "FilmsBucket", {
+      // blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      // encryption: s3.BucketEncryption.S3_MANAGED,
+      // enforceSSL: true,
+      // versioned: true,
+      removalPolicy: RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      bucketName: "films-bucket",
+    });
+
+    // new cdk.aws_s3_deployment.BucketDeployment(this, "Deployment", {
+    //   sources: [cdk.aws_s3_deployment.Source.asset("src/csv")],
+    //   destinationBucket: bucket,
+    // });
+
+    const filmsReadWriteDB = new NodejsFunction(this, "FilmsReadWriteDB", {
+      runtime: Runtime.NODEJS_20_X,
+      entry: "src/functions/film-upload-db.ts",
+      handler: "handler",
+      environment: {
+        TABLE_NAME: dbTable.tableName,
+      },
+    });
+
+    bucket.grantReadWrite(filmsReadWriteDB);
+    dbTable.grantReadWriteData(filmsReadWriteDB);
+
+    const s3PutEventSource = new cdk.aws_lambda_event_sources.S3EventSource(
+      bucket,
+      {
+        events: [s3.EventType.OBJECT_CREATED_PUT],
+      }
+    );
+
+    filmsReadWriteDB.addEventSource(s3PutEventSource);
   }
 }

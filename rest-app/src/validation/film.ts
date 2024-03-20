@@ -29,3 +29,19 @@ export class Film {
   @IsString()
   posterUrl: string;
 }
+
+export function createFilm(csvFilm: any): Film {
+  const film = new Film();
+
+  film.director = csvFilm.director;
+  film.distributor = csvFilm.distributor;
+  film.about = csvFilm.about;
+  film.cast = csvFilm.cast;
+  film.posterUrl = csvFilm.posterUrl;
+  film.country = csvFilm.country;
+  film.name = csvFilm.name;
+  film.length = parseInt(csvFilm.length);
+  film.year = parseInt(csvFilm.year);
+
+  return film;
+}
