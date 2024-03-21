@@ -15,6 +15,8 @@ import * as s3 from "aws-cdk-lib/aws-s3";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
 import { S3DeployAction } from "aws-cdk-lib/aws-codepipeline-actions";
 import { ReadFromFile } from "../src/functions/read-from-file.class";
+import { Queue } from "aws-cdk-lib/aws-sqs";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 
 export class RestAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -54,15 +56,35 @@ export class RestAppStack extends cdk.Stack {
 
     usagePlan.addApiKey(apiKey);
 
+    const queue = new Queue(this, "Queue", {
+      queueName: "MyCDKQueue",
+    });
+
     // defining Lambdas
-    const createFilmLambda = new NodejsFunction(this, "CreateLambda", {
+
+    // producer
+    const validateFilmLambda = new NodejsFunction(this, "ValidateLambda", {
       runtime: Runtime.NODEJS_20_X,
-      entry: "src/functions/create.ts",
+      entry: "src/functions/producer/validate.ts",
       handler: "handler",
       environment: {
         TABLE_NAME: dbTable.tableName,
+        SQS_URL: queue.queueUrl,
       },
     });
+
+    // consumer
+    const storeFilmLambda = new NodejsFunction(this, "StoreLambda", {
+      runtime: Runtime.NODEJS_20_X,
+      entry: "src/functions/consumer/store-item.ts",
+      handler: "handler",
+      environment: {
+        TABLE_NAME: dbTable.tableName, // "DbTable"???
+      },
+    });
+
+    storeFilmLambda.addEventSource(new SqsEventSource(queue));
+    queue.grantConsumeMessages(storeFilmLambda);
 
     const getFilmLambda = new NodejsFunction(this, "GetLambda", {
       runtime: Runtime.NODEJS_20_X,
@@ -100,18 +122,29 @@ export class RestAppStack extends cdk.Stack {
       },
     });
 
-    dbTable.grantReadWriteData(createFilmLambda);
+    // const storeNewFilmLambda = new NodejsFunction(this, "DeleteLambda", {
+    //   runtime: Runtime.NODEJS_20_X,
+    //   entry: "src/functions/store-film.ts",
+    //   handler: "handler",
+    //   environment: {
+    //     TABLE_NAME: dbTable.tableName,
+    //   },
+    // });
+
+    queue.grantSendMessages(validateFilmLambda);
+    // dbTable.grantReadWriteData(validateFilmLambda);
     dbTable.grantReadWriteData(getFilmLambda);
     dbTable.grantReadWriteData(getAllFilmsLambda);
     dbTable.grantReadWriteData(updateFilmLambda);
     dbTable.grantReadWriteData(deleteFilmLambda);
+    dbTable.grantReadWriteData(storeFilmLambda);
 
     // creating routes?
     const films = api.root.addResource("films"); // /films
     const film = films.addResource("{id}"); // /films/id
 
     // integration with Lambdas
-    const createFilmIntegration = new LambdaIntegration(createFilmLambda);
+    const createFilmIntegration = new LambdaIntegration(validateFilmLambda);
     const getFilmIntegration = new LambdaIntegration(getFilmLambda);
     const getAllFilmsIntegration = new LambdaIntegration(getAllFilmsLambda);
     const updateFilmIntegration = new LambdaIntegration(updateFilmLambda);
@@ -155,7 +188,7 @@ export class RestAppStack extends cdk.Stack {
 
     const filmsReadWriteDB = new NodejsFunction(this, "FilmsReadWriteDB", {
       runtime: Runtime.NODEJS_20_X,
-      entry: "src/functions/film-upload-db.ts",
+      entry: "src/functions/read-file-csv.ts",
       handler: "handler",
       environment: {
         TABLE_NAME: dbTable.tableName,

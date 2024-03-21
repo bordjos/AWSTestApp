@@ -16,7 +16,7 @@ export async function createItem(body: Film) {
   // generate a random uuid
   const uuid = randomUUID();
 
-  // If no body, return an error
+  console.log("film inside of createItem():", body);
 
   // Parse the body - JSON.parse converts a JSON string into a JavaScript object
 
