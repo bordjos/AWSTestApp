@@ -3,7 +3,7 @@ import { createItem } from "../../repositories/create-item";
 import { Film, createFilm } from "../../validation/film";
 import { validateOrReject } from "class-validator";
 
-export const handler = async (event: SQSEvent, context: any) => {
+export const handler = async (event: SQSEvent) => {
   const batchItemFailures: { ItemIdentifier: string }[] = [];
 
   for (const record of event.Records) {
@@ -12,7 +12,7 @@ export const handler = async (event: SQSEvent, context: any) => {
       const parsedMessage = JSON.parse(message);
       const film: Film = parsedMessage.message;
 
-    //   await validateOrReject(film);
+      //   await validateOrReject(film);
 
       console.log("message: ", message);
       console.log("film: ", film);
@@ -33,6 +33,8 @@ async function processMessageAsync(record: SQSRecord): Promise<void> {
   if (!record.body) {
     throw new Error("There is an error in the SQS message.");
   }
+
+  throw new Error("INTENTIONAL ERROR BY BODJA!!!");
 
   console.log(`Processed message: ${record.body}`);
 }

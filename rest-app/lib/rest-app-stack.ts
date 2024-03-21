@@ -58,6 +58,7 @@ export class RestAppStack extends cdk.Stack {
 
     const deadLetterQueue = new Queue(this, "DeadQueue", {
       queueName: "MyCDKDeadQueue",
+      visibilityTimeout: cdk.Duration.seconds(120),
     });
 
     const queue = new Queue(this, "Queue", {
