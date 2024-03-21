@@ -4,25 +4,22 @@ import { Film, createFilm } from "../../validation/film";
 
 export const handler = async (event: SQSEvent) => {
   try {
-    const message = event.Records[0].body;
-    const parsedMessage = JSON.parse(message);
-    const film = parsedMessage.message;
+    // const message = event.Records[0].body;
 
-    console.log("message: ", message);
-    console.log("film: ", film);
+    // const parsedMessage = JSON.parse(message);
+    // const film = parsedMessage.message;
 
-    await createItem(film);
+    for (const record of event.Records) {
+      const message = record.body;
+      const parsedMessage = JSON.parse(message);
+      const film = parsedMessage.message;
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Film created" }),
-    };
+      console.log("message: ", message);
+      console.log("film: ", film);
+
+      await createItem(film);
+    }
   } catch (error) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({
-        message: "There was a problem with creating the film",
-      }),
-    };
+    console.log(error);
   }
 };
