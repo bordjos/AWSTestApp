@@ -56,8 +56,17 @@ export class RestAppStack extends cdk.Stack {
 
     usagePlan.addApiKey(apiKey);
 
+    const deadLetterQueue = new Queue(this, "DeadQueue", {
+      queueName: "MyCDKDeadQueue",
+    });
+
     const queue = new Queue(this, "Queue", {
       queueName: "MyCDKQueue",
+      visibilityTimeout: cdk.Duration.seconds(5),
+      deadLetterQueue: {
+        queue: deadLetterQueue,
+        maxReceiveCount: 3, // after the maximum receives threshold is exceeded, the message goes into a dead letter queue
+      },
     });
 
     // defining Lambdas
@@ -83,7 +92,11 @@ export class RestAppStack extends cdk.Stack {
       },
     });
 
-    storeFilmLambda.addEventSource(new SqsEventSource(queue));
+    storeFilmLambda.addEventSource(
+      new SqsEventSource(queue, {
+        reportBatchItemFailures: true,
+      })
+    );
     queue.grantConsumeMessages(storeFilmLambda);
 
     const getFilmLambda = new NodejsFunction(this, "GetLambda", {

@@ -1,25 +1,38 @@
-import { SQSEvent } from "aws-lambda";
+import { SQSEvent, SQSRecord } from "aws-lambda";
 import { createItem } from "../../repositories/create-item";
 import { Film, createFilm } from "../../validation/film";
+import { validateOrReject } from "class-validator";
 
-export const handler = async (event: SQSEvent) => {
-  try {
-    // const message = event.Records[0].body;
+export const handler = async (event: SQSEvent, context: any) => {
+  const batchItemFailures: { ItemIdentifier: string }[] = [];
 
-    // const parsedMessage = JSON.parse(message);
-    // const film = parsedMessage.message;
-
-    for (const record of event.Records) {
+  for (const record of event.Records) {
+    try {
       const message = record.body;
       const parsedMessage = JSON.parse(message);
-      const film = parsedMessage.message;
+      const film: Film = parsedMessage.message;
+
+    //   await validateOrReject(film);
 
       console.log("message: ", message);
       console.log("film: ", film);
 
+      await processMessageAsync(record);
+
       await createItem(film);
+    } catch (error) {
+      console.log(error);
+      batchItemFailures.push({ ItemIdentifier: record.messageId });
     }
-  } catch (error) {
-    console.log(error);
   }
+
+  return { batchItemFailures };
 };
+
+async function processMessageAsync(record: SQSRecord): Promise<void> {
+  if (!record.body) {
+    throw new Error("There is an error in the SQS message.");
+  }
+
+  console.log(`Processed message: ${record.body}`);
+}
